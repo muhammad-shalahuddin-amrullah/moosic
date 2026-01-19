@@ -1,7 +1,6 @@
-"use client";
+'use client';
 
-import React, { createContext, useContext, useState } from "react";
-import axios from "axios";
+import React, { createContext, useContext, useState } from 'react';
 
 interface Track {
   id: string;
@@ -23,41 +22,60 @@ const PlayerContext = createContext<PlayerContextType | undefined>(undefined);
 
 export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const [currentTrack, setCurrentTrack] = useState<Track | null>(null);
-  const [streamUrl, setStreamUrl] = useState("");
-  const [status, setStatus] = useState("");
+  const [streamUrl, setStreamUrl] = useState('');
+  const [status, setStatus] = useState('');
   const [isPlaying, setIsPlaying] = useState(false);
 
   const playTrack = async (track: Track) => {
     setCurrentTrack(track);
-    setStreamUrl("");
-    setStatus("Mencari sumber lossless...");
+    setStreamUrl(''); 
+    setStatus('Mencari sumber audio...');
     setIsPlaying(false);
 
     try {
-      // Logic pintar: Gabungkan Artis + Judul
-      const artistName = track.artists ? track.artists[0].name : "";
-      const searchQuery = `${track.name} ${artistName}`;
+      const query = `${track.name} ${track.artists ? track.artists[0].name : ''}`;
+      
+      // KITA GUNAKAN CORS PROXY AGAR BISA AKSES DARI BROWSER LANGSUNG
+      // Proxy ini membungkus request kita agar lolos dari aturan browser
+      const CORS_PROXY = "https://corsproxy.io/?";
+      
+      // 1. Search ke Dabmusic via Proxy
+      setStatus(`Mencari: ${query}...`);
+      const searchTarget = `https://dabmusic.xyz/api/search?q=${encodeURIComponent(query)}&type=track&offset=0`;
+      
+      const searchRes = await fetch(CORS_PROXY + encodeURIComponent(searchTarget));
+      const searchData = await searchRes.json();
+      
+      const foundTrack = searchData.tracks?.[0];
 
-      // Panggil API backend kita
-      const res = await axios.get(`/api/stream?query=${searchQuery}`);
+      if (!foundTrack) {
+        setStatus('Lagu tidak ditemukan di database.');
+        return;
+      }
 
-      if (res.data.url) {
-        setStreamUrl(res.data.url);
+      // 2. Get Stream URL via Proxy
+      setStatus('Mengambil audio stream...');
+      const streamTarget = `https://dabmusic.xyz/api/stream?trackId=${foundTrack.id}`;
+      
+      const streamRes = await fetch(CORS_PROXY + encodeURIComponent(streamTarget));
+      const streamData = await streamRes.json();
+      
+      if (streamData.url) {
+        setStreamUrl(streamData.url);
         setStatus(`Playing: ${track.name}`);
         setIsPlaying(true);
       } else {
-        setStatus("Gagal: Stream tidak ditemukan");
+        setStatus('Gagal: URL Stream kosong.');
       }
+
     } catch (error: any) {
-      console.error(error);
-      setStatus("Gagal memuat lagu.");
+      console.error("Client Fetch Error:", error);
+      setStatus('Gagal memuat lagu (Network Error).');
     }
   };
 
   return (
-    <PlayerContext.Provider
-      value={{ currentTrack, streamUrl, isPlaying, status, playTrack }}
-    >
+    <PlayerContext.Provider value={{ currentTrack, streamUrl, isPlaying, status, playTrack }}>
       {children}
     </PlayerContext.Provider>
   );
