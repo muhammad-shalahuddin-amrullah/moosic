@@ -2,6 +2,7 @@
 
 import React, { createContext, useContext, useState } from 'react';
 
+// Tipe data Track sesuai struktur dari Spotify API
 interface Track {
   id: string;
   name: string;
@@ -10,6 +11,7 @@ interface Track {
   duration_ms?: number;
 }
 
+// Tipe data Context untuk state global player
 interface PlayerContextType {
   currentTrack: Track | null;
   streamUrl: string;
@@ -29,72 +31,64 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const playTrack = async (track: Track) => {
     setCurrentTrack(track);
     setStreamUrl(''); 
-    setStatus('Connecting via HTMLDriven Proxy...');
+    setStatus('Connecting to Cloudflare Worker...');
     setIsPlaying(false);
 
     try {
+      // Gabungkan Judul + Artis untuk pencarian yang akurat
       const query = `${track.name} ${track.artists ? track.artists[0].name : ''}`;
       
-      // --- MENGGUNAKAN PROXY HTMLDRIVEN ---
-      const PROXY = "https://test.cors.workers.dev/?";
+      // --- KONFIGURASI PROXY PRIBADI ANDA ---
+      const PROXY_BASE = "https://moosic.jayaprat7.workers.dev/?url=";
       
-      // 1. Search
+      // 1. TAHAP SEARCH (Mencari ID lagu di Dabmusic)
       setStatus(`Mencari: ${track.name}...`);
       
       // URL Target Asli
       const searchTarget = `https://dabmusic.xyz/api/search?q=${encodeURIComponent(query)}&type=track&offset=0`;
       
-      // Gabungkan: Proxy + Encode(Target)
-      // Kita harus encode target agar karakter '&' dan '?' tidak membingungkan server proxy
-      const finalSearchUrl = PROXY + encodeURIComponent(searchTarget);
+      // Request via Worker
+      // Kita encode target URL agar aman saat dikirim ke Worker
+      const searchRes = await fetch(PROXY_BASE + encodeURIComponent(searchTarget));
       
-      const searchRes = await fetch(finalSearchUrl);
-      
-      // Cek apakah proxy berhasil merespon
       if (!searchRes.ok) {
-        // Coba baca error body jika ada (untuk debugging di console)
-        const errText = await searchRes.text();
-        console.error("Proxy Search Error Body:", errText);
-        throw new Error(`Proxy Error: ${searchRes.status}`);
+        throw new Error(`Worker Search Error: ${searchRes.statusText}`);
       }
       
-      // HTMLDriven biasanya mengembalikan body langsung sebagai JSON
       const searchData = await searchRes.json();
-      
-      // Validasi struktur data dari Dabmusic
-      // Kadang proxy mengembalikan wrapper { body: "..." }, kita cek dulu
-      const actualData = searchData.body ? JSON.parse(searchData.body) : searchData; 
-      
-      const foundTrack = actualData.tracks?.[0];
+      const foundTrack = searchData.tracks?.[0];
 
       if (!foundTrack) {
-        setStatus('Lagu tidak ditemukan.');
+        setStatus('Lagu tidak ditemukan di server lossless.');
         return;
       }
 
-      // 2. Stream
+      // 2. TAHAP STREAM (Mendapatkan Link Audio)
       setStatus('Mengambil stream audio...');
+      
+      // Gunakan ID yang ditemukan dari tahap search
       const streamTarget = `https://dabmusic.xyz/api/stream?trackId=${foundTrack.id}`;
-      const finalStreamUrl = PROXY + encodeURIComponent(streamTarget);
       
-      const streamRes = await fetch(finalStreamUrl);
+      // Request via Worker lagi
+      const streamRes = await fetch(PROXY_BASE + encodeURIComponent(streamTarget));
       
-      if (!streamRes.ok) throw new Error("Proxy Stream Error");
+      if (!streamRes.ok) {
+        throw new Error(`Worker Stream Error: ${streamRes.statusText}`);
+      }
 
-      const streamRaw = await streamRes.json();
-      const streamData = streamRaw.body ? JSON.parse(streamRaw.body) : streamRaw;
+      const streamData = await streamRes.json();
       
       if (streamData.url) {
         setStreamUrl(streamData.url);
         setStatus(`Playing: ${track.name}`);
         setIsPlaying(true);
       } else {
-        setStatus('Gagal: Server tidak memberikan URL.');
+        setStatus('Gagal: Server tidak memberikan URL Audio.');
       }
 
     } catch (error: any) {
-      console.error("Fetch Error:", error);
-      setStatus('Gagal memuat. Cek koneksi atau coba lagi.');
+      console.error("Player Error:", error);
+      setStatus('Gagal memuat. Pastikan Cloudflare Worker aktif.');
     }
   };
 
