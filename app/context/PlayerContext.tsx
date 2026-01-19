@@ -2,7 +2,6 @@
 
 import React, { createContext, useContext, useState } from 'react';
 
-// Tipe data Track sesuai struktur dari Spotify API
 interface Track {
   id: string;
   name: string;
@@ -11,7 +10,6 @@ interface Track {
   duration_ms?: number;
 }
 
-// Tipe data Context untuk state global player
 interface PlayerContextType {
   currentTrack: Track | null;
   streamUrl: string;
@@ -28,67 +26,92 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const [status, setStatus] = useState('');
   const [isPlaying, setIsPlaying] = useState(false);
 
+  // --- LOGIKA ROTASI PROXY ---
+  const fetchWithFallback = async (targetUrl: string) => {
+    // Daftar Proxy (Prioritas 1 sampai 3)
+    const proxies = [
+      // 1. CodeTabs (Biasanya paling kuat tembus Cloudflare)
+      (url: string) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
+      // 2. AllOrigins (Cadangan stabil)
+      (url: string) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+      // 3. ThingProxy (Cadangan terakhir)
+      (url: string) => `https://thingproxy.freeboard.io/fetch/${url}`,
+    ];
+
+    let lastError;
+
+    for (let i = 0; i < proxies.length; i++) {
+      const proxyUrl = proxies[i](targetUrl);
+      console.log(`Trying Proxy #${i + 1}:`, proxyUrl);
+      
+      try {
+        const res = await fetch(proxyUrl);
+        
+        // Cek jika status OK
+        if (!res.ok) throw new Error(`Status ${res.status}`);
+        
+        // Cek jika response adalah JSON (Bukan HTML Cloudflare "Just a moment...")
+        const textBody = await res.text();
+        if (textBody.includes('<!DOCTYPE html>') || textBody.includes('Just a moment')) {
+          throw new Error("Terblokir Cloudflare (HTML Response)");
+        }
+
+        // Jika berhasil parse JSON, kembalikan data
+        return JSON.parse(textBody);
+
+      } catch (err) {
+        console.warn(`Proxy #${i + 1} gagal:`, err);
+        lastError = err;
+        // Lanjut ke proxy berikutnya...
+      }
+    }
+    
+    // Jika semua gagal
+    throw lastError;
+  };
+
   const playTrack = async (track: Track) => {
     setCurrentTrack(track);
     setStreamUrl(''); 
-    setStatus('Connecting to Cloudflare Worker...');
+    setStatus('Mencari jalur koneksi terbaik...');
     setIsPlaying(false);
 
     try {
-      // Gabungkan Judul + Artis untuk pencarian yang akurat
       const query = `${track.name} ${track.artists ? track.artists[0].name : ''}`;
       
-      // --- KONFIGURASI PROXY PRIBADI ANDA ---
-      const PROXY_BASE = "https://moosic.jayaprat7.workers.dev/?url=";
-      
-      // 1. TAHAP SEARCH (Mencari ID lagu di Dabmusic)
+      // 1. SEARCH
       setStatus(`Mencari: ${track.name}...`);
-      
-      // URL Target Asli
       const searchTarget = `https://dabmusic.xyz/api/search?q=${encodeURIComponent(query)}&type=track&offset=0`;
       
-      // Request via Worker
-      // Kita encode target URL agar aman saat dikirim ke Worker
-      const searchRes = await fetch(PROXY_BASE + encodeURIComponent(searchTarget));
+      const searchData = await fetchWithFallback(searchTarget);
       
-      if (!searchRes.ok) {
-        throw new Error(`Worker Search Error: ${searchRes.statusText}`);
-      }
-      
-      const searchData = await searchRes.json();
-      const foundTrack = searchData.tracks?.[0];
+      // Handle format response yang kadang dibungkus proxy
+      const actualData = searchData.contents ? JSON.parse(searchData.contents) : searchData;
+      const foundTrack = actualData.tracks?.[0];
 
       if (!foundTrack) {
-        setStatus('Lagu tidak ditemukan di server lossless.');
+        setStatus('Lagu tidak ditemukan.');
         return;
       }
 
-      // 2. TAHAP STREAM (Mendapatkan Link Audio)
+      // 2. STREAM
       setStatus('Mengambil stream audio...');
-      
-      // Gunakan ID yang ditemukan dari tahap search
       const streamTarget = `https://dabmusic.xyz/api/stream?trackId=${foundTrack.id}`;
       
-      // Request via Worker lagi
-      const streamRes = await fetch(PROXY_BASE + encodeURIComponent(streamTarget));
-      
-      if (!streamRes.ok) {
-        throw new Error(`Worker Stream Error: ${streamRes.statusText}`);
-      }
+      const streamData = await fetchWithFallback(streamTarget);
+      const actualStream = streamData.contents ? JSON.parse(streamData.contents) : streamData;
 
-      const streamData = await streamRes.json();
-      
-      if (streamData.url) {
-        setStreamUrl(streamData.url);
+      if (actualStream.url) {
+        setStreamUrl(actualStream.url);
         setStatus(`Playing: ${track.name}`);
         setIsPlaying(true);
       } else {
-        setStatus('Gagal: Server tidak memberikan URL Audio.');
+        setStatus('Gagal: URL Stream kosong.');
       }
 
     } catch (error: any) {
-      console.error("Player Error:", error);
-      setStatus('Gagal memuat. Pastikan Cloudflare Worker aktif.');
+      console.error("All Proxies Failed:", error);
+      setStatus('Gagal memuat. Server sedang sibuk/memblokir akses.');
     }
   };
 
