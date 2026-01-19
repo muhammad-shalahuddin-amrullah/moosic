@@ -29,25 +29,24 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const playTrack = async (track: Track) => {
     setCurrentTrack(track);
     setStreamUrl(''); 
-    setStatus('Menghubungkan via AllOrigins...');
+    setStatus('Menghubungkan ke server...');
     setIsPlaying(false);
 
     try {
       const query = `${track.name} ${track.artists ? track.artists[0].name : ''}`;
       
-      // KITA GUNAKAN ALLORIGINS (RAW MODE)
-      // Proxy ini sangat simpel: dia mengambil URL target dan memberikannya ke kita tanpa CORS.
-      const PROXY_BASE = "https://api.allorigins.win/raw?url=";
+      // --- SOLUSI: PROXY CODETABS ---
+      // Proxy ini mengubah request browser menjadi request server-side di sistem mereka
+      // sehingga mem-bypass CORS dan IP Block sekaligus.
+      const PROXY = "https://api.codetabs.com/v1/proxy?quest=";
       
       // 1. Search
       setStatus(`Mencari: ${track.name}...`);
       const searchTarget = `https://dabmusic.xyz/api/search?q=${encodeURIComponent(query)}&type=track&offset=0`;
       
-      // Tambahkan timestamp agar tidak di-cache oleh proxy
-      const searchUrl = PROXY_BASE + encodeURIComponent(searchTarget) + "&t=" + Date.now();
+      const searchRes = await fetch(PROXY + encodeURIComponent(searchTarget));
       
-      const searchRes = await fetch(searchUrl);
-      if (!searchRes.ok) throw new Error("Search Gagal (Proxy Error)");
+      if (!searchRes.ok) throw new Error("Proxy Search Gagal");
       
       const searchData = await searchRes.json();
       const foundTrack = searchData.tracks?.[0];
@@ -58,14 +57,12 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       }
 
       // 2. Stream
-      setStatus('Mengambil stream audio...');
+      setStatus('Mengambil audio...');
       const streamTarget = `https://dabmusic.xyz/api/stream?trackId=${foundTrack.id}`;
       
-      // Tambahkan timestamp lagi
-      const streamUrlWithProxy = PROXY_BASE + encodeURIComponent(streamTarget) + "&t=" + Date.now();
+      const streamRes = await fetch(PROXY + encodeURIComponent(streamTarget));
       
-      const streamRes = await fetch(streamUrlWithProxy);
-      if (!streamRes.ok) throw new Error("Stream Gagal (Proxy Error)");
+      if (!streamRes.ok) throw new Error("Proxy Stream Gagal");
 
       const streamData = await streamRes.json();
       
@@ -78,8 +75,8 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       }
 
     } catch (error: any) {
-      console.error("Proxy Error:", error);
-      setStatus('Gagal memuat. Silakan coba lagi nanti.');
+      console.error("Fetch Error:", error);
+      setStatus('Gagal memuat. Server sibuk/memblokir akses.');
     }
   };
 
