@@ -38,7 +38,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       // --- SOLUSI: PROXY CODETABS ---
       // Proxy ini mengubah request browser menjadi request server-side di sistem mereka
       // sehingga mem-bypass CORS dan IP Block sekaligus.
-      const PROXY = "https://api.codetabs.com/v1/proxy?quest=";
+      const PROXY = "https://corsproxy.io/?url=";
       
       // 1. Search
       setStatus(`Mencari: ${track.name}...`);
