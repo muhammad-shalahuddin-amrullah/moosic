@@ -29,35 +29,43 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const playTrack = async (track: Track) => {
     setCurrentTrack(track);
     setStreamUrl(''); 
-    setStatus('Mencari sumber audio...');
+    setStatus('Menghubungkan ke server...');
     setIsPlaying(false);
 
     try {
       const query = `${track.name} ${track.artists ? track.artists[0].name : ''}`;
       
-      // KITA GUNAKAN CORS PROXY AGAR BISA AKSES DARI BROWSER LANGSUNG
-      // Proxy ini membungkus request kita agar lolos dari aturan browser
-      const CORS_PROXY = "https://corsproxy.io/?";
+      // --- DIRECT FETCH (Tanpa Proxy) ---
       
-      // 1. Search ke Dabmusic via Proxy
-      setStatus(`Mencari: ${query}...`);
+      // 1. Search
+      setStatus(`Mencari: ${track.name}...`);
       const searchTarget = `https://dabmusic.xyz/api/search?q=${encodeURIComponent(query)}&type=track&offset=0`;
       
-      const searchRes = await fetch(CORS_PROXY + encodeURIComponent(searchTarget));
-      const searchData = await searchRes.json();
+      // Kita kirim request polosan (biarkan browser handle headers)
+      const searchRes = await fetch(searchTarget);
       
+      if (!searchRes.ok) {
+        throw new Error(`Gagal Search: ${searchRes.statusText}`);
+      }
+      
+      const searchData = await searchRes.json();
       const foundTrack = searchData.tracks?.[0];
 
       if (!foundTrack) {
-        setStatus('Lagu tidak ditemukan di database.');
+        setStatus('Lagu tidak ditemukan.');
         return;
       }
 
-      // 2. Get Stream URL via Proxy
-      setStatus('Mengambil audio stream...');
+      // 2. Get Stream
+      setStatus('Mengambil audio...');
       const streamTarget = `https://dabmusic.xyz/api/stream?trackId=${foundTrack.id}`;
       
-      const streamRes = await fetch(CORS_PROXY + encodeURIComponent(streamTarget));
+      const streamRes = await fetch(streamTarget);
+      
+      if (!streamRes.ok) {
+        throw new Error(`Gagal Stream: ${streamRes.statusText}`);
+      }
+
       const streamData = await streamRes.json();
       
       if (streamData.url) {
@@ -65,12 +73,17 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         setStatus(`Playing: ${track.name}`);
         setIsPlaying(true);
       } else {
-        setStatus('Gagal: URL Stream kosong.');
+        setStatus('Gagal: Server tidak memberikan URL.');
       }
 
     } catch (error: any) {
-      console.error("Client Fetch Error:", error);
-      setStatus('Gagal memuat lagu (Network Error).');
+      console.error("Direct Fetch Error:", error);
+      // Pesan error user-friendly
+      if (error.message.includes('Failed to fetch') || error.message.includes('CORS')) {
+        setStatus('Gagal: Diblokir oleh browser (CORS).');
+      } else {
+        setStatus(`Error: ${error.message}`);
+      }
     }
   };
 
