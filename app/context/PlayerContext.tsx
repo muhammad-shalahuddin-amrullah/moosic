@@ -36,7 +36,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       const query = `${track.name} ${track.artists ? track.artists[0].name : ''}`;
       
       // --- MENGGUNAKAN PROXY HTMLDRIVEN ---
-      const PROXY = "https://cors-proxy.htmldriven.com/?url=";
+      const PROXY = "https://test.cors.workers.dev/?";
       
       // 1. Search
       setStatus(`Mencari: ${track.name}...`);
