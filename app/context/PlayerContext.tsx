@@ -1,7 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, useState } from "react";
-import axios from "axios";
+import axios from "axios"; // Pastikan axios terinstall
 
 interface Track {
   id: string;
@@ -30,7 +30,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const playTrack = async (track: Track) => {
     setCurrentTrack(track);
     setStreamUrl("");
-    setStatus("Mencari sumber lossless...");
+    setStatus("Memproses audio di server...");
     setIsPlaying(false);
 
     try {
@@ -38,7 +38,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       const artistName = track.artists ? track.artists[0].name : "";
       const searchQuery = `${track.name} ${artistName}`;
 
-      // Panggil API backend kita
+      // Panggil API Backend Vercel kita sendiri
       const res = await axios.get(`/api/stream?query=${searchQuery}`);
 
       if (res.data.url) {
@@ -50,7 +50,8 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       }
     } catch (error: any) {
       console.error(error);
-      setStatus("Gagal memuat lagu.");
+      const msg = error.response?.data?.error || "Gagal memuat.";
+      setStatus(msg);
     }
   };
 
