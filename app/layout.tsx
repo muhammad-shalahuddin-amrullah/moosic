@@ -8,6 +8,7 @@ import "react-h5-audio-player/lib/styles.css";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useSession, signIn, signOut } from "next-auth/react";
+export const dynamic = 'force-dynamic'; 
 
 // --- KOMPONEN PLAYER (STICKY BOTTOM) ---
 function StickyPlayer() {
