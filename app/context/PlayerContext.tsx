@@ -1,7 +1,6 @@
-"use client";
+'use client';
 
-import React, { createContext, useContext, useState } from "react";
-import axios from "axios"; // Pastikan axios terinstall
+import React, { createContext, useContext, useState } from 'react';
 
 interface Track {
   id: string;
@@ -23,42 +22,66 @@ const PlayerContext = createContext<PlayerContextType | undefined>(undefined);
 
 export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const [currentTrack, setCurrentTrack] = useState<Track | null>(null);
-  const [streamUrl, setStreamUrl] = useState("");
-  const [status, setStatus] = useState("");
+  const [streamUrl, setStreamUrl] = useState('');
+  const [status, setStatus] = useState('');
   const [isPlaying, setIsPlaying] = useState(false);
 
   const playTrack = async (track: Track) => {
     setCurrentTrack(track);
-    setStreamUrl("");
-    setStatus("Memproses audio di server...");
+    setStreamUrl(''); 
+    setStatus('Menghubungkan ke Cloudflare Worker...');
     setIsPlaying(false);
 
     try {
-      // Logic pintar: Gabungkan Artis + Judul
-      const artistName = track.artists ? track.artists[0].name : "";
-      const searchQuery = `${track.name} ${artistName}`;
+      const query = `${track.name} ${track.artists ? track.artists[0].name : ''}`;
+      
+      // --- GUNAKAN WORKER PRIBADI ANDA ---
+      // Ini adalah solusi paling stabil & anti-blokir
+      const WORKER_URL = "https://moosic.jayaprat7.workers.dev/?url=";
+      
+      // 1. SEARCH
+      setStatus(`Mencari: ${track.name}...`);
+      const searchTarget = `https://dabmusic.xyz/api/search?q=${encodeURIComponent(query)}&type=track&offset=0`;
+      
+      // Browser -> Worker Anda -> Dabmusic
+      const searchRes = await fetch(WORKER_URL + encodeURIComponent(searchTarget));
+      
+      if (!searchRes.ok) throw new Error("Gagal menghubungi Worker (Search)");
+      
+      const searchData = await searchRes.json();
+      const foundTrack = searchData.tracks?.[0];
 
-      // Panggil API Backend Vercel kita sendiri
-      const res = await axios.get(`/api/stream?query=${searchQuery}`);
+      if (!foundTrack) {
+        setStatus('Lagu tidak ditemukan.');
+        return;
+      }
 
-      if (res.data.url) {
-        setStreamUrl(res.data.url);
+      // 2. STREAM
+      setStatus('Mengambil stream...');
+      const streamTarget = `https://dabmusic.xyz/api/stream?trackId=${foundTrack.id}`;
+      
+      const streamRes = await fetch(WORKER_URL + encodeURIComponent(streamTarget));
+      
+      if (!streamRes.ok) throw new Error("Gagal menghubungi Worker (Stream)");
+
+      const streamData = await streamRes.json();
+      
+      if (streamData.url) {
+        setStreamUrl(streamData.url);
         setStatus(`Playing: ${track.name}`);
         setIsPlaying(true);
       } else {
-        setStatus("Gagal: Stream tidak ditemukan");
+        setStatus('Gagal: URL Stream kosong.');
       }
+
     } catch (error: any) {
-      console.error(error);
-      const msg = error.response?.data?.error || "Gagal memuat.";
-      setStatus(msg);
+      console.error("Playback Error:", error);
+      setStatus('Gagal memuat lagu.');
     }
   };
 
   return (
-    <PlayerContext.Provider
-      value={{ currentTrack, streamUrl, isPlaying, status, playTrack }}
-    >
+    <PlayerContext.Provider value={{ currentTrack, streamUrl, isPlaying, status, playTrack }}>
       {children}
     </PlayerContext.Provider>
   );
