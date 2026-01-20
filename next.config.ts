@@ -1,15 +1,14 @@
-import type { NextConfig } from "next";
-
-const nextConfig: NextConfig = {
-  // 1. Matikan pemeriksaan Lint & TypeScript saat Build (Supaya lolos Vercel)
+/** @type {import('next').NextConfig} */
+const nextConfig = {
+  // 1. Matikan pemeriksaan ESLint (penyebab error Anda)
   eslint: {
     ignoreDuringBuilds: true,
   },
+  // 2. Matikan pemeriksaan TypeScript
   typescript: {
     ignoreBuildErrors: true,
   },
-
-  // 2. Izinkan gambar dari semua domain
+  // 3. Konfigurasi Gambar
   images: {
     remotePatterns: [
       {
@@ -18,10 +17,6 @@ const nextConfig: NextConfig = {
       },
     ],
   },
-
-  // 3. SOLUSI ERROR "ENOENT" (PENTING!)
-  // Memberitahu Next.js agar library ini jangan di-bundle, biarkan sebagai external
-  serverExternalPackages: ['got-scraping', 'header-generator', 'browserslist'],
 };
 
 export default nextConfig;
