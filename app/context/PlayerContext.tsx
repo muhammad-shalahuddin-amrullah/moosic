@@ -29,26 +29,29 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const playTrack = async (track: Track) => {
     setCurrentTrack(track);
     setStreamUrl(''); 
-    setStatus('Menghubungkan ke Cloudflare Worker...');
+    setStatus('Menghubungkan ke Worker...');
     setIsPlaying(false);
 
     try {
       const query = `${track.name} ${track.artists ? track.artists[0].name : ''}`;
       
-      // --- GUNAKAN WORKER PRIBADI ANDA ---
-      // Ini adalah solusi paling stabil & anti-blokir
+      // URL Worker Anda
       const WORKER_URL = "https://moosic.jayaprat7.workers.dev/?url=";
       
       // 1. SEARCH
       setStatus(`Mencari: ${track.name}...`);
       const searchTarget = `https://dabmusic.xyz/api/search?q=${encodeURIComponent(query)}&type=track&offset=0`;
       
-      // Browser -> Worker Anda -> Dabmusic
+      // Fetch ke Worker
       const searchRes = await fetch(WORKER_URL + encodeURIComponent(searchTarget));
-      
-      if (!searchRes.ok) throw new Error("Gagal menghubungi Worker (Search)");
-      
-      const searchData = await searchRes.json();
+      const searchText = await searchRes.text(); // Ambil text dulu buat ngecek error HTML
+
+      // Cek apakah kena blokir Cloudflare (biasanya balikan HTML)
+      if (searchText.includes("<!DOCTYPE html>") || searchText.includes("Just a moment")) {
+        throw new Error("Worker terblokir oleh Cloudflare Dabmusic.");
+      }
+
+      const searchData = JSON.parse(searchText);
       const foundTrack = searchData.tracks?.[0];
 
       if (!foundTrack) {
@@ -61,10 +64,9 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       const streamTarget = `https://dabmusic.xyz/api/stream?trackId=${foundTrack.id}`;
       
       const streamRes = await fetch(WORKER_URL + encodeURIComponent(streamTarget));
+      const streamText = await streamRes.text();
       
-      if (!streamRes.ok) throw new Error("Gagal menghubungi Worker (Stream)");
-
-      const streamData = await streamRes.json();
+      const streamData = JSON.parse(streamText);
       
       if (streamData.url) {
         setStreamUrl(streamData.url);
@@ -75,8 +77,8 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       }
 
     } catch (error: any) {
-      console.error("Playback Error:", error);
-      setStatus('Gagal memuat lagu.');
+      console.error("Player Error:", error);
+      setStatus(`Gagal: ${error.message || "Network Error"}`);
     }
   };
 
