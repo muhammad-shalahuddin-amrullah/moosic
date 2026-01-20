@@ -5,6 +5,7 @@ import { useSession } from "next-auth/react";
 import axios from "axios";
 import { usePlayer } from "./context/PlayerContext";
 import Link from "next/link";
+export const dynamic = 'force-dynamic'; // <--- TAMBAHKAN INI
 
 export default function Home() {
   const { data: session } = useSession();

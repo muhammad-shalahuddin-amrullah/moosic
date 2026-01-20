@@ -4,6 +4,7 @@ import axios from "axios";
 import { useSession } from "next-auth/react";
 import { usePlayer } from "../context/PlayerContext";
 import Link from "next/link";
+export const dynamic = 'force-dynamic'; 
 
 export default function SearchPage() {
   const { data: session } = useSession();
@@ -13,7 +14,7 @@ export default function SearchPage() {
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!(session as any)?.accessToken) return;
+    if(!query || !(session as any)?.accessToken) return;
 
     const res = await axios.get(`/api/search?q=${query}`, {
       headers: { Authorization: `Bearer ${(session as any).accessToken}` },

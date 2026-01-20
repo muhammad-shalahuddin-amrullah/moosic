@@ -5,6 +5,7 @@ import axios from "axios";
 import { useParams } from "next/navigation";
 import { usePlayer } from "../../context/PlayerContext";
 import Link from "next/link";
+export const dynamic = 'force-dynamic'; // <--- TAMBAHKAN INI
 
 export default function PlaylistPage() {
   const { id } = useParams();
