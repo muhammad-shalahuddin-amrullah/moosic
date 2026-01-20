@@ -36,7 +36,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       const query = `${track.name} ${track.artists ? track.artists[0].name : ''}`;
       
       // URL Worker Anda
-      const WORKER_URL = "https://moosic.jayaprat7.workers.dev/?url=";
+      const WORKER_URL = "https://proxy.cors.sh/";
       
       // 1. SEARCH
       setStatus(`Mencari: ${track.name}...`);
